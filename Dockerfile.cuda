@@ -1,0 +1,45 @@
+# GPU variant of the embedder — for running on a box with CUDA.
+# Use in place of the default Dockerfile when the host has an NVIDIA GPU.
+#
+# Build:
+#   docker build -t amphora-help-bot-embedder-cuda -f Dockerfile.cuda .
+# Run:
+#   docker run --rm --gpus all -p 8001:8000 \
+#     -e EMBEDDER_DEVICE=cuda \
+#     -e EMBEDDER_API_KEY=<secret> \
+#     -v hf-models:/models \
+#     amphora-help-bot-embedder-cuda
+#
+# Expected speedup vs CPU bge-m3: 50-500x depending on GPU class.
+
+FROM nvidia/cuda:12.4.1-runtime-ubuntu22.04
+
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends \
+         python3.12 python3.12-venv python3.12-dev python3-pip \
+         build-essential curl \
+    && rm -rf /var/lib/apt/lists/*
+
+RUN ln -sf /usr/bin/python3.12 /usr/bin/python \
+    && python -m pip install --upgrade pip
+
+WORKDIR /app
+
+# CUDA torch wheels (CUDA 12.x). pin torch version to match CPU build so
+# behaviour stays identical across endpoints.
+RUN pip install --no-cache-dir \
+    --index-url https://download.pytorch.org/whl/cu124 \
+    torch==2.11.0
+
+COPY requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
+
+COPY app.py .
+
+ENV MODEL_NAME=BAAI/bge-m3
+ENV HF_HOME=/models
+ENV EMBEDDER_DEVICE=cuda
+
+EXPOSE 8000
+
+CMD ["uvicorn", "app:app", "--host", "0.0.0.0", "--port", "8000"]
