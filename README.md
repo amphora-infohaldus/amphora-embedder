@@ -24,13 +24,30 @@ in `dim`). Send batches of texts in one
 request — the service does internal batching of `EMBEDDER_INTERNAL_BATCH`
 (default 32 on CPU, 64–128 reasonable on GPU).
 
-## Live URLs (call from inside the cluster)
+## Live URLs
+
+### In-cluster (no auth needed beyond network reach)
 
 | Cluster | URL | Notes |
 |---|---|---|
 | **prod** | `http://embedder.embedder.svc.cluster.local:8000` | 3 CPU replicas, fluid CPU sizing (low request + no limit, priorityClass `low-priority-burstable`), yields to tenant pods under contention. |
 | **dev** | `http://embedder.helpbot.svc.cluster.local:8000` | Still in `helpbot` namespace pending consolidation. Same image. |
 | **MSI GPU box** *(dev only today)* | `http://gpu-embedder.helpbot.svc.cluster.local:8001` | Reached via the `tailscale-egress` pod in `helpbot` ns. Faster path when MSI is on. |
+
+### External (edge nginx, Amphora networks only — not the public internet)
+
+| Cluster | URL | Notes |
+|---|---|---|
+| **prod** | `https://embedder.svc.amphora.ee` | Edge nginx → NodePort 30180. |
+| **dev** | `https://embedder.dev.amphora.ee` | Edge nginx → NodePort 30181. |
+
+These hostnames are public **DNS**, but the edge nginx IP-allowlists them to
+Amphora's own networks only (`10.0.0.0/8` + office block `212.47.211.64/26`) —
+**customer/internet IPs are denied**. Both also require the bearer token
+(`EMBEDDER_PUBLIC=1` is set, so `EMBEDDER_API_KEY` is mandatory and `/docs` is
+hidden). Edge limits: 50 MB body, 120 s timeouts. Prefer the in-cluster
+`*.svc.cluster.local` URLs for internal consumers; use the external ones only
+from off-cluster Amphora hosts.
 
 K8s manifests live in
 [`AmphoraKubernetes/workloads/embedder-prod/`](https://github.com/amphora-infohaldus/AmphoraKubernetes/tree/main/workloads/embedder-prod)
@@ -105,7 +122,7 @@ serve different purposes.
 | Image pull | `imagePullPolicy: Always` + `imagePullSecrets: [ghcr-pull]` | Always re-checks `:latest` digest on pod start. `ghcr-pull` is a cluster-wide GHCR PAT secret. |
 | Model cache | `emptyDir{sizeLimit:5Gi}` mounted at `/models` | First start downloads ~2 GB from HuggingFace; subsequent restarts of the same pod reuse it. New pods (after eviction or scale-up) re-download — acceptable tradeoff for the simplicity of not needing an RWX PVC. |
 | Health | `/health` startup + readiness + liveness probes | Model load takes 30–60 s on cold start; startup probe gives up to 5 min before liveness kicks in. |
-| Service | `embedder.embedder.svc.cluster.local:8000` ClusterIP | No external ingress — call from inside the cluster only. |
+| Service | `embedder.embedder.svc.cluster.local:8000`, NodePort 30180 | In-cluster DNS for internal consumers; NodePort is the edge-nginx target for `embedder.svc.amphora.ee` (IP-allowlisted, see Live URLs). |
 | Flux Kustomization | `prod-embedder` in `flux/prod/workloads.yaml` (5-min reconcile, `prune: false`) | Edit YAML in git → Flux applies. |
 
 ### Dev cluster (`workloads/helpbot/embedder/`)
