@@ -153,6 +153,51 @@ For DR or sandbox K:
 
 There is **no embedder on the DR cluster today** — gate that on whether the helpbot/customer-journey probes actually need synthesis during a DR event.
 
+## MSI GPU box (manual deploy, reached over Tailscale)
+
+The GPU endpoint is a manual deployment of this same service on the MSI
+workstation — **not** in K8s. Consumers reach it in-cluster via the
+`tailscale-egress` pod at `gpu-embedder.helpbot.svc.cluster.local:8001`.
+Expected speedup over CPU bge-m3: 50×–500×.
+
+Run it (PowerShell, in `services/embedder` or this repo, inside the venv):
+
+```powershell
+$env:EMBEDDER_DEVICE = "cuda"
+$env:EMBEDDER_DTYPE = "bf16"           # smallest drift vs CPU fp32 pool members
+$env:EMBEDDER_INTERNAL_BATCH = "128"   # GPU saturates well above the CPU default of 32
+$env:EMBEDDER_API_KEY = "<token>"      # required; consumers send Authorization: Bearer <token>
+$env:MODEL_NAME = "BAAI/bge-m3"
+$env:HF_HOME = "$HOME\hf-models"
+uvicorn app:app --host 0.0.0.0 --port 8001
+```
+
+CUDA torch wheel install and prereqs: see `Dockerfile.cuda` (cu128 index,
+`torch==2.11.0`).
+
+**Autostart (required — this is the fix for the silent outages).** A
+hand-started `uvicorn` is a foreground process: a reboot, sleep, or crash
+kills it and consumers silently fall back to the slow CPU pool until
+someone notices. Wrap it so it survives:
+
+- Install as a Windows service with [NSSM](https://nssm.cc/): point it at
+  the venv's `uvicorn` with the env vars above set as service environment,
+  set startup to **Automatic**, and enable restart-on-failure.
+- Or register a Scheduled Task triggered **At log on** / **At startup**
+  running the same command. NSSM is preferred — it restarts on crash, a
+  Task does not.
+
+**Firewall.** Tailscale traffic doesn't bypass Windows Firewall. Allow
+inbound TCP 8001 on the Tailscale (Public) profile:
+
+```powershell
+New-NetFirewallRule -DisplayName "Embedder 8001 (Tailscale)" `
+  -Direction Inbound -LocalPort 8001 -Protocol TCP -Action Allow -Profile Public
+```
+
+**Do not** expose 8001 on any public interface — Tailscale is the only
+intended path, and `EMBEDDER_API_KEY` is the second gate.
+
 ## Topology (current → planned)
 
 Today:
