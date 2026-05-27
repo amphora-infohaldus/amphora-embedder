@@ -29,6 +29,11 @@ from sentence_transformers import SentenceTransformer
 MODEL_NAME = os.getenv("MODEL_NAME", "BAAI/bge-m3")
 DEVICE = os.getenv("EMBEDDER_DEVICE", "cpu")
 API_KEY = os.getenv("EMBEDDER_API_KEY", "").strip()
+# Set EMBEDDER_PUBLIC=1 when the service is reachable from the public
+# internet (ingress on *.amphora.ee). It hardens two things: refuses to
+# start without EMBEDDER_API_KEY, and hides the interactive docs + OpenAPI
+# schema so the API surface isn't advertised.
+PUBLIC = os.getenv("EMBEDDER_PUBLIC", "").strip().lower() in {"1", "true", "yes"}
 
 _DTYPE_MAP = {
     "fp32": torch.float32, "float32": torch.float32,
@@ -39,7 +44,17 @@ _DTYPE_NAME = os.getenv("EMBEDDER_DTYPE", "fp32").strip().lower()
 DTYPE = _DTYPE_MAP.get(_DTYPE_NAME, torch.float32)
 INTERNAL_BATCH = int(os.getenv("EMBEDDER_INTERNAL_BATCH", "32"))
 
-app = FastAPI(title="amphora-help-bot embedder")
+if PUBLIC and not API_KEY:
+    raise RuntimeError(
+        "EMBEDDER_PUBLIC is set but EMBEDDER_API_KEY is empty — refusing to "
+        "start a publicly-exposed embedder without bearer-token auth."
+    )
+
+# Hide /docs, /redoc, and the OpenAPI schema when publicly exposed.
+_docs_kwargs = (
+    dict(docs_url=None, redoc_url=None, openapi_url=None) if PUBLIC else {}
+)
+app = FastAPI(title="amphora-help-bot embedder", **_docs_kwargs)
 model = SentenceTransformer(MODEL_NAME, device=DEVICE)
 if DTYPE is torch.float16:
     model = model.half()
@@ -85,6 +100,7 @@ def health() -> dict:
         "cuda_device_name": _cuda_device_name,
         "torch_threads": _torch_threads,
         "auth_required": bool(API_KEY),
+        "public": PUBLIC,
     }
 
 

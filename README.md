@@ -233,6 +233,7 @@ Planned:
 | `HF_HOME` | unset | Mount a volume here to persist the model download across pod restarts. |
 | `HF_TOKEN` | unset | Required only for gated models. |
 | `EMBEDDER_API_KEY` | unset | If set, requests must include `Authorization: Bearer <token>`. |
+| `EMBEDDER_PUBLIC` | unset | Set `1` when behind a public ingress. Refuses to start without `EMBEDDER_API_KEY` and hides `/docs`, `/redoc`, and the OpenAPI schema. |
 
 ## See also
 
