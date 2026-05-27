@@ -116,8 +116,9 @@ Same image, same probes, same antiAffinity. Differences:
 |---|---|---|
 | Namespace | `helpbot` (legacy) | Will move to its own `embedder` namespace to match prod. |
 | Replicas | 3 | Always-on CPU fallback for the helpbot drafting loop when the MSI GPU is offline. |
-| CPU | `500m` req, `2` limit | Bounded sizing — dev cluster has less headroom and we don't want the embedder to crowd dev tenants. |
-| Memory | `1Gi` req, `4Gi` limit | Same envelope as prod. |
+| PriorityClass | none | **No fluid sizing in dev** — unlike prod, the dev embedder runs at default priority with a hard CPU limit (below), so it is not preemptible by tenant pods. |
+| CPU | `500m` req, `2` limit | Bounded sizing — dev cluster has less headroom and we don't want the embedder to crowd dev tenants. Contrast prod's `100m` req / no limit. |
+| Memory | `1Gi` req, `4Gi` limit | Smaller than prod (`3Gi`/`5Gi`). Tighter request fits the dev cluster's headroom. |
 | `HF_TOKEN` | Optional, from `helpbot-secrets` secret key `HF_TOKEN` | Needed only if you switch to a gated model. |
 
 ### Image build & roll
