@@ -25,10 +25,12 @@ RUN ln -sf /usr/bin/python3.12 /usr/bin/python \
 
 WORKDIR /app
 
-# CUDA torch wheels (CUDA 12.x). pin torch version to match CPU build so
-# behaviour stays identical across endpoints.
+# CUDA torch wheels. Keep torch==2.11.0 to match the CPU build (CPU/GPU
+# nodes must stay in lockstep) — but pull from the cu128 index: 2.11.0 is
+# no longer published on cu124. Verified 2026-04 on NVIDIA driver 576 /
+# CUDA 12.9 runtime. Fallback if cu128 errors: cu128 -> cu126 -> cu124 -> cu121.
 RUN pip install --no-cache-dir \
-    --index-url https://download.pytorch.org/whl/cu124 \
+    --index-url https://download.pytorch.org/whl/cu128 \
     torch==2.11.0
 
 COPY requirements.txt .
