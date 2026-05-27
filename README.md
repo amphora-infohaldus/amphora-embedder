@@ -153,14 +153,21 @@ For DR or sandbox K:
 
 There is **no embedder on the DR cluster today** — gate that on whether the helpbot/customer-journey probes actually need synthesis during a DR event.
 
-## MSI GPU box (manual deploy, reached over Tailscale)
+## GPU boxes (manual deploy, reached over Tailscale)
 
-The GPU endpoint is a manual deployment of this same service on the MSI
-workstation — **not** in K8s. Consumers reach it in-cluster via the
-`tailscale-egress` pod at `gpu-embedder.helpbot.svc.cluster.local:8001`.
-Expected speedup over CPU bge-m3: 50×–500×.
+A GPU endpoint is a manual deployment of this same service on a workstation
+— **not** in K8s. There are two today: Ingmar's MSI box and Janis's RTX 4070
+box; each is one endpoint in the dev-box embedder pool. Consumers reach them
+in-cluster via the `tailscale-egress` pod (e.g.
+`gpu-embedder.helpbot.svc.cluster.local:8001`). Expected speedup over CPU
+bge-m3: 50×–500×.
 
-Run it (PowerShell, in `services/embedder` or this repo, inside the venv):
+**Full cold-start (prereqs → clone → venv → launch → autostart → report) for
+any GPU box, including onboarding an additional box like Janis's, is in
+[`docs/gpu-box-runbook.md`](docs/gpu-box-runbook.md).** The summary below is
+the quick run+autostart reference once the box is set up.
+
+Run it (PowerShell, in a clone of this repo, inside the venv):
 
 ```powershell
 $env:EMBEDDER_DEVICE = "cuda"
